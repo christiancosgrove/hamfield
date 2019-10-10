@@ -6,6 +6,7 @@ from torch.autograd import grad
 
 class ImageGradient(nn.Module):
     def __init__(self, pos=0):
+        super(ImageGradient, self).__init__()
         k = np.zeros((3,3,3))
         arr = [-0.5,0,0.5]
         if pos == 0:
@@ -24,7 +25,7 @@ class ImageGradient(nn.Module):
 
 class Hamiltonian(nn.Module):
     def __init__(self, df):
-
+        super(Hamiltonian, self).__init__()
         self.gradx = ImageGradient(pos=1)
         self.grady = ImageGradient(pos=2)
 
@@ -51,6 +52,7 @@ class Hamiltonian(nn.Module):
 class HamiltonianLoss(nn.Module):
 
     def __init__(self):
+        super(HamiltonianLoss, self).__init__()
         self.gradx = ImageGradient(pos=1)
         self.grady = ImageGradient(pos=2)
         self.gradt = ImageGradient(pos=0)
@@ -71,6 +73,7 @@ class HamiltonianLoss(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, df):
+        super(Encoder, self).__init__()
         self.conv1 = nn.Conv3d(3, 16, 3)
         self.conv2 = nn.Conv3d(16, 16, 3)
         self.conv3 = nn.Conv3d(16, df, 3)
@@ -88,6 +91,7 @@ class Encoder(nn.Module):
 
 class HamFieldModel(nn.Module):
     def __init__(self, df):
+        super(HamFieldModel, self).__init__()
         self.encoder = Encoder(df)
         self.ham = Hamiltonian(df)
 
