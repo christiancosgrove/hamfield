@@ -5,7 +5,7 @@ from skvideo.io import vwrite
 
 def train():
     # model = HamFieldModel(8)
-    system = pong.PingPong(5)
+    system = pong.PingPong(8)
 
     f = system.frames(512, 512, 0.01)
 
