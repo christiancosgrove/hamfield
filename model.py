@@ -25,8 +25,8 @@ class ImageGradient(nn.Module):
 class Hamiltonian(nn.Module):
     def __init__(self, df):
 
-        self.gradx = ImageGradient(pos=0)
-        self.grady = ImageGradient(pos=1)
+        self.gradx = ImageGradient(pos=1)
+        self.grady = ImageGradient(pos=2)
 
         self.conv1 = nn.Conv3d(df * 6, df, 1)
         self.conv2 = nn.Conv3d(df, df, 1)
@@ -51,9 +51,9 @@ class Hamiltonian(nn.Module):
 class HamiltonianLoss(nn.Module):
 
     def __init__(self):
-        self.gradx = ImageGradient(pos=0)
-        self.grady = ImageGradient(pos=1)
-        self.gradt = ImageGradient(pos=2)
+        self.gradx = ImageGradient(pos=1)
+        self.grady = ImageGradient(pos=2)
+        self.gradt = ImageGradient(pos=0)
 
     def forward(self, ham, p, dpx, dpy, q, dqx, dqy):
         varp = grad(ham, p, create_graph=True) - self.gradx(grad(ham, dpx, create_graph=True)) - self.grady(grad(ham, dpy, create_graph=True))
@@ -69,11 +69,27 @@ class HamiltonianLoss(nn.Module):
 
         return l_q + l_p
 
+class Encoder(nn.Module):
+    def __init__(self, df):
+        self.conv1 = nn.Conv3d(3, 16, 3)
+        self.conv2 = nn.Conv3d(16, 16, 3)
+        self.conv3 = nn.Conv3d(16, df, 3)
+        self.df = df
+        
+
+    def forward(self, images):
+        x = nn.ReLU()(self.conv1(images))
+        x = nn.ReLU()(self.conv2(x))
+        x = nn.ReLU()(self.conv3(x))
+
+        p, q = torch.split(x, self.df, dim=1)
+        
+        return p, q
 
 class HamFieldModel(nn.Module):
-    def __init__(self):
+    def __init__(self, df):
+        self.encoder = Encoder(df)
+        self.ham = Hamiltonian(df)
 
-        pass
-    
-    def forward(self, x):
-        return x
+    def forward(self, images):
+        return self.ham(self.encoder(images))
