@@ -6,12 +6,14 @@ from torch.autograd import grad
 
 class ImageGradient(nn.Module):
     def __init__(self, pos=0):
-        k = np.repeat([np.repeat([[-0.5,0,0.5]],3,axis=0)],3,axis=0)
-        t = list(range(3))
-        t[pos] = 0
-        t[0] = pos
-        k = np.transpose(k, t)
-
+        k = np.zeros((3,3,3))
+        arr = [-0.5,0,0.5]
+        if pos == 0:
+            k[:,1,1] = arr
+        elif pos == 1:
+            k[1,:,1] = arr
+        elif pos == 2:
+            k[1,1,:] = arr
         self.kernel: torch.Tensor = torch.from_numpy(k)
         self.kernel.requires_grad = False
 
@@ -66,8 +68,6 @@ class HamiltonianLoss(nn.Module):
         l_p = (l_p * l_p).view(batch_size, -1).sum()
 
         return l_q + l_p
-
-
 
 
 class HamFieldModel(nn.Module):
