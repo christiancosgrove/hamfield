@@ -59,6 +59,28 @@ class Hamiltonian(nn.Module):
 
         return input, p, dpx, dpy, q, dqx, dqy
 
+def variational_derivatives(gradx, grady, ham, p, dpx, dpy, q, dqx, dqy):
+    batch_size = ham.size(0)
+    hsum = ham.view(batch_size, -1).sum()
+
+    varp = grad(hsum, p, create_graph=True)[0] - gradx(grad(hsum, dpx, create_graph=True)[0]) - grady(grad(hsum, dpy, create_graph=True)[0])
+    varq = grad(hsum, q, create_graph=True)[0] - gradx(grad(hsum, dqx, create_graph=True)[0]) - grady(grad(hsum, dqy, create_graph=True)[0])
+
+    return varp, varq
+
+class Integrator(nn.Module):
+
+    def __init__(self, df):
+        super(Integrator, self).__init__()
+
+    def forward(self, ham, p, dpx, dpy, q, dqx, dqy, dt):
+        varp, varq = variational_derivatives(gradx, grady, ham, p, dpx, dpy, q, dqx, dqy)
+
+        pp = p - dt * varq
+        qp = q + dt * varp
+
+        return pp, qp
+
 class HamiltonianLoss(nn.Module):
 
     def __init__(self, df):
@@ -69,15 +91,10 @@ class HamiltonianLoss(nn.Module):
 
     def forward(self, ham, p, dpx, dpy, q, dqx, dqy):
         batch_size = ham.size(0)
-
-        hsum = ham.view(batch_size, -1).sum()
-
-        varp = grad(hsum, p, create_graph=True)[0] - self.gradx(grad(hsum, dpx, create_graph=True)[0]) - self.grady(grad(hsum, dpy, create_graph=True)[0])
-        varq = grad(hsum, q, create_graph=True)[0] - self.gradx(grad(hsum, dqx, create_graph=True)[0]) - self.grady(grad(hsum, dqy, create_graph=True)[0])
+        varp, varq = variational_derivatives(self.gradx, self.grady, ham, p, dpx, dpy, q, dqx, dqy)
 
         l_q = self.gradt(q) - varp
         l_p = self.gradt(p) + varq
-
 
         # Collect subset window
         pad = (self.gradx.order - 1) //2
