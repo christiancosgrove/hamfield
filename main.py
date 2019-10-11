@@ -58,6 +58,7 @@ def train():
     optimizer = Adam(model.parameters(), lr=5e-3)
 
     for e in tqdm(range(epochs)):
+        mloss = []
         for i, batch in tqdm(enumerate(loader)):
             batch = try_cuda(batch)
             optimizer.zero_grad()
@@ -69,6 +70,8 @@ def train():
             # loss = decoder_loss
             loss.backward()
             optimizer.step()
+            mloss.append(loss.cpu().detach().numpy())
+
 
             def disp_tensor(t):
                 im = t.cpu().detach().numpy()
@@ -79,6 +82,7 @@ def train():
                 return im
 
         if e % 2 == 0:
+            print('Mean loss: ', np.mean(mloss))
             imsave(f'out/out{e}.png', disp_tensor(decoded))
             # imsave(f'out/in{i}.png', disp_tensor(batch))
 
