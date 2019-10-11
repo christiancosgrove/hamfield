@@ -26,7 +26,7 @@ def gen_data():
 
 def train():
 
-    iters = 100
+    iters = 10000
 
     df = 4
 
@@ -37,7 +37,7 @@ def train():
     
     mb_size = 4
 
-    optimizer = Adam(model.parameters(), lr=5e-3)
+    optimizer = Adam(model.parameters(), lr=1e-3)
     for i in tqdm(range(iters)):
         sample = np.random.choice(data.shape[0], size=mb_size)
         batch = torch.tensor(data[sample])
@@ -46,7 +46,7 @@ def train():
         output, decoded = model(batch)
         ham_loss = HamiltonianLoss(df)(*output)
         decoder_loss = nn.MSELoss()(decoded, batch)
-        loss = 0.01*ham_loss + decoder_loss
+        loss = 1e-3*ham_loss + decoder_loss
         # loss = decoder_loss
         loss.backward()
         optimizer.step()
@@ -59,7 +59,7 @@ def train():
             im = im.astype(np.uint8)
             return im
 
-        if i % 2 == 0:
+        if i % 10 == 0:
             imsave(f'out/out{i}.png', disp_tensor(decoded))
             imsave(f'out/in{i}.png', disp_tensor(batch))
 
