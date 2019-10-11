@@ -12,12 +12,14 @@ class PhysicsSystem(object):
         frames = []
         for _ in range(count):
             self.step(timestep)
-            frames.append(self.render(resolution))
-        return np.array(frames)
+            frames.append(np.expand_dims(self.render(resolution), axis=1))
+        c = np.concatenate(frames, axis=1)
+        return c
 
 
 class PingPong(PhysicsSystem):
     def __init__(self, num_balls, ball_size=0.05):
+
         self.pos = np.random.uniform(0, 1, size=(2, num_balls))
         self.vel = np.random.uniform(-1, 1, size=(2, num_balls))
 
@@ -25,7 +27,6 @@ class PingPong(PhysicsSystem):
         self.radius = 0.1
 
         self.fix()
-        super()
 
     def fix(self):
         # Check collisions
@@ -72,7 +73,7 @@ class PingPong(PhysicsSystem):
         self.pos += self.vel * timestep
 
     def render(self, resolution: int) -> np.array:
-        frame = np.ones((resolution, resolution), dtype=np.uint8) * 255
+        frame = np.ones((3, resolution, resolution), dtype=np.uint8) * 255
 
         for i in range(self.num_balls):
             circ = circle(resolution * self.pos[0,i], resolution * self.pos[1,i], self.radius * resolution//2, shape=frame.shape)
