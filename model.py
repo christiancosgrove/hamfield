@@ -9,7 +9,6 @@ class ImageGradient(nn.Module):
         super(ImageGradient, self).__init__()
 
         self.in_channels = in_channels
-
         # arr = [-0.5,0,0.5]
         arr = [1./280,-4./105,1./5,-4./5,0.,4./5,-1./5,4./105,-1./280]
         self.order = len(arr)
@@ -79,6 +78,12 @@ class HamiltonianLoss(nn.Module):
         l_q = self.gradt(q) - varp
         l_p = self.gradt(p) + varq
 
+
+        # Collect subset window
+        pad = (self.gradx.order - 1) //2
+        chan = l_q.size(1)
+        l_q = l_q[:, :, pad:-pad+1, pad:-pad+1, pad:-pad+1]
+        l_p = l_q[:, :, pad:-pad+1, pad:-pad+1, pad:-pad+1]
 
         l_q = (l_q * l_q).view(batch_size, -1).sum()
         l_p = (l_p * l_p).view(batch_size, -1).sum()
