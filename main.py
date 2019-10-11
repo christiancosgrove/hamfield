@@ -65,7 +65,7 @@ def train():
     model = try_cuda(HamFieldModel(df))
     print('generating data')
     
-    dataset = PongDataset(4, 32, 48)
+    dataset = PongDataset(4, 32*32, 48)
     mb_size = 1
     loader = DataLoader(dataset, mb_size, shuffle=True, num_workers=4)
 
