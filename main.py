@@ -11,10 +11,13 @@ from torch import nn
 window_size = 7
 
 def gen_data():
-    system = pong.PingPong(8)
+    system = pong.PingPong(3)
 
-    num_frames = 16
+    num_frames = 32
     f = system.frames(num_frames, 122, 0.01)
+
+    vwrite('out/out2.gif', f.transpose((1, 2, 3, 0)))
+
     # Subsample windows
     data = []
     for i in range(0, num_frames - window_size):
@@ -34,7 +37,7 @@ def train():
     
     mb_size = 4
 
-    optimizer = Adam(model.parameters())
+    optimizer = Adam(model.parameters(), lr=5e-3)
     for i in tqdm(range(iters)):
         sample = np.random.choice(data.shape[0], size=mb_size)
         batch = torch.tensor(data[sample])
@@ -43,17 +46,22 @@ def train():
         output, decoded = model(batch)
         ham_loss = HamiltonianLoss(df)(*output)
         decoder_loss = nn.MSELoss()(decoded, batch)
-        loss = ham_loss + decoder_loss
+        loss = 0.01*ham_loss + decoder_loss
+        # loss = decoder_loss
         loss.backward()
         optimizer.step()
 
-        if i % 10 == 0:
-            im = decoded.cpu().detach().numpy()
+        def disp_tensor(t):
+            im = t.cpu().detach().numpy()
             im = im[0, :, 0, :, :]
             im = np.transpose(im, (1, 2, 0))
             im *= 255
             im = im.astype(np.uint8)
-            imsave(f'out/test{i}.png', im)
+            return im
+
+        if i % 2 == 0:
+            imsave(f'out/out{i}.png', disp_tensor(decoded))
+            imsave(f'out/in{i}.png', disp_tensor(batch))
 
 
 

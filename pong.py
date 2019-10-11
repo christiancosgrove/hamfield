@@ -18,13 +18,13 @@ class PhysicsSystem(object):
 
 
 class PingPong(PhysicsSystem):
-    def __init__(self, num_balls, ball_size=0.05):
+    def __init__(self, num_balls, ball_size=0.2):
 
         self.pos = np.random.uniform(0, 1, size=(2, num_balls))
         self.vel = np.random.uniform(-1, 1, size=(2, num_balls))
 
         self.num_balls = num_balls
-        self.radius = 0.1
+        self.radius = ball_size
 
         self.fix()
 
@@ -73,10 +73,10 @@ class PingPong(PhysicsSystem):
         self.pos += self.vel * timestep
 
     def render(self, resolution: int) -> np.array:
-        frame = np.ones((3, resolution, resolution), dtype=np.uint8) * 255
+        frame = np.ones((resolution, resolution, 3), dtype=np.uint8) * 255
 
         for i in range(self.num_balls):
-            circ = circle(resolution * self.pos[0,i], resolution * self.pos[1,i], self.radius * resolution//2, shape=frame.shape)
-            frame[circ] = 0
-        return frame
+            rr, cc = circle(resolution * self.pos[0,i], resolution * self.pos[1,i], self.radius * resolution//2, shape=frame.shape)
+            frame[rr, cc, :] = 0
+        return np.transpose(frame, (2, 0, 1))
 

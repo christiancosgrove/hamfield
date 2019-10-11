@@ -108,7 +108,7 @@ class Decoder(nn.Module):
         input = torch.cat([p,q], dim=1)
         input = nn.ReLU()(self.conv1(input))
         input = nn.ReLU()(self.conv2(input))
-        input = nn.ReLU()(self.conv3(input))
+        input = nn.Sigmoid()(self.conv3(input))
 
         return input
 
