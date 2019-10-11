@@ -9,19 +9,28 @@ class ImageGradient(nn.Module):
         super(ImageGradient, self).__init__()
 
         self.in_channels = in_channels
-        k = np.zeros((self.in_channels, self.in_channels, 3,3,3), dtype=np.float32)
-        arr = [-0.5,0,0.5]
+
+        # arr = [-0.5,0,0.5]
+        arr = [1./280,-4./105,1./5,-4./5,0.,4./5,-1./5,4./105,-1./280]
+        self.order = len(arr)
         if pos == 0:
-            k[:, :,1,1] = arr
+            k = np.zeros((self.in_channels, self.in_channels, self.order, 1, 1), dtype=np.float32)
+            k[:, :, :, 0, 0] = arr
+            self.padding = ((self.order - 1)//2, 0, 0)
         elif pos == 1:
-            k[:, 1,:,1] = arr
+            k = np.zeros((self.in_channels, self.in_channels, 1, self.order, 1), dtype=np.float32)
+            k[:, :, 0, :, 0] = arr
+            self.padding = (0, (self.order - 1)//2, 0)
         elif pos == 2:
-            k[:, 1,1,:] = arr
+            k = np.zeros((self.in_channels, self.in_channels, 1, 1, self.order), dtype=np.float32)
+            k[:, :, 0, 0, :] = arr
+            self.padding = (0, 0, (self.order - 1)//2)
+
         self.kernel = nn.Parameter(torch.from_numpy(k), requires_grad=False)
 
 
     def forward(self, x: torch.Tensor):
-        return F.conv3d(x, self.kernel, padding=1)
+        return F.conv3d(x, self.kernel, padding=self.padding)
 
 class Hamiltonian(nn.Module):
     def __init__(self, df):
@@ -82,14 +91,16 @@ class Encoder(nn.Module):
     def __init__(self, df):
         super(Encoder, self).__init__()
         self.conv1 = nn.Conv3d(3, 4, 3)
+        self.bn1 = nn.BatchNorm3d(4)
         self.conv2 = nn.Conv3d(4, 8, 3)
+        self.bn2 = nn.BatchNorm3d(8)
         self.conv3 = nn.Conv3d(8, 2*df, 3)
         self.df = df
         
 
     def forward(self, images):
-        x = nn.ReLU()(self.conv1(images))
-        x = nn.ReLU()(self.conv2(x))
+        x = nn.ReLU()(self.bn1(self.conv1(images)))
+        x = nn.ReLU()(self.bn2(self.conv2(x)))
         x = nn.ReLU()(self.conv3(x))
 
         p, q = torch.split(x, self.df, dim=1)
@@ -100,14 +111,16 @@ class Decoder(nn.Module):
     def __init__(self, df):
         super(Decoder, self).__init__()
         self.df = df
-        self.conv1 = nn.ConvTranspose3d(8, 4, 3)
+        self.conv1 = nn.ConvTranspose3d(df*2, 4, 3)
+        self.bn1 = nn.BatchNorm3d(4)
         self.conv2 = nn.ConvTranspose3d(4, 4, 3)
+        self.bn2 = nn.BatchNorm3d(4)
         self.conv3 = nn.ConvTranspose3d(4, 3, 3)
 
     def forward(self, p, q):
         input = torch.cat([p,q], dim=1)
-        input = nn.ReLU()(self.conv1(input))
-        input = nn.ReLU()(self.conv2(input))
+        input = nn.ReLU()(self.bn1(self.conv1(input)))
+        input = nn.ReLU()(self.bn2(self.conv2(input)))
         input = nn.Sigmoid()(self.conv3(input))
 
         return input

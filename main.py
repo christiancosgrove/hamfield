@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 class PongDataset(Dataset):
     def __init__(self, num_balls, num_frames, resolution):
-        system = pong.PingPong(num_balls)
+        system = pong.PingPong(num_balls, 0.2)
 
         f = system.frames(num_frames, resolution, 0.01)
 
@@ -31,7 +31,7 @@ class PongDataset(Dataset):
     def __getitem__(self, i):
         return self.dat[i]
 
-window_size = 7
+window_size = 50
 
 def try_cuda(module):
     if torch.cuda.is_available():
@@ -48,7 +48,7 @@ def train():
     model = try_cuda(HamFieldModel(df))
     print('generating data')
     
-    dataset = PongDataset(3, 256, 32)
+    dataset = PongDataset(4, 256, 32)
     mb_size = 8
     loader = DataLoader(dataset, mb_size, shuffle=True, num_workers=4)
 
@@ -66,7 +66,7 @@ def train():
             output, decoded = model(batch)
             ham_loss = hloss(*output)
             decoder_loss = nn.MSELoss()(decoded, batch)
-            loss = 1e-1*ham_loss + decoder_loss
+            loss = 1e-3*ham_loss + decoder_loss
             # loss = decoder_loss
             loss.backward()
             optimizer.step()
