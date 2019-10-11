@@ -1,5 +1,5 @@
 import pong
-from model import HamFieldModel, HamiltonianLoss
+from model import HamFieldModel, HamiltonianLoss, Decoder, Integrator, Hamiltonian, PredictiveHamModel, Encoder
 import numpy as np
 from skvideo.io import vwrite
 from skimage.io import imsave
@@ -14,7 +14,7 @@ class PongDataset(Dataset):
     def __init__(self, num_balls, num_frames, resolution):
         system = pong.PingPong(num_balls, 0.2)
 
-        f = system.frames(num_frames, resolution, 0.01)
+        f = system.frames(num_frames, resolution, 0.05)
 
         vwrite('out/out2.gif', f.transpose((1, 2, 3, 0)))
 
@@ -40,6 +40,23 @@ def try_cuda(module):
         # print('Warning: CUDA not enabled')
     return module
 
+def predicted_dynamics(df, num_frames, image, encoder: Encoder, decoder: Decoder, hamiltonian: Hamiltonian):
+    model = try_cuda(PredictiveHamModel(df, hamiltonian))
+    curr_state = encoder(image)
+
+    frames = []
+    for i in range(num_frames):
+        # Get the current frame imagined by the model
+        f = decoder(*curr_state).cpu().detach().numpy()
+        frames.append(f[:, :,window_size // 2, :, :])
+
+        # Perform a step of integration
+        curr_state = model(*curr_state, 0.05)
+    return np.transpose(np.squeeze(np.concatenate(frames, axis=0)), (0, 2, 3, 1))
+
+def skvideo_write(name, arr):
+    vwrite(name, (arr * 255).astype(np.uint8))
+
 def train():
 
     epochs = 100
@@ -48,8 +65,8 @@ def train():
     model = try_cuda(HamFieldModel(df))
     print('generating data')
     
-    dataset = PongDataset(4, 256, 32)
-    mb_size = 8
+    dataset = PongDataset(4, 32, 48)
+    mb_size = 1
     loader = DataLoader(dataset, mb_size, shuffle=True, num_workers=4)
 
     
@@ -66,7 +83,7 @@ def train():
             output, decoded = model(batch)
             ham_loss = hloss(*output)
             decoder_loss = nn.MSELoss()(decoded, batch)
-            loss = 1e-1*ham_loss + decoder_loss
+            loss = 1e1*ham_loss + decoder_loss
             # loss = decoder_loss
             loss.backward()
             optimizer.step()
@@ -86,6 +103,8 @@ def train():
             imsave(f'out/out{e}.png', disp_tensor(decoded))
             # imsave(f'out/in{i}.png', disp_tensor(batch))
 
+            # Get predicted dynamics and save to a file
+            skvideo_write('out/test.gif', predicted_dynamics(df, 64, batch[:1], model.encoder, model.decoder, model.ham))
 
 
 if __name__ == '__main__':

@@ -9,8 +9,8 @@ class ImageGradient(nn.Module):
         super(ImageGradient, self).__init__()
 
         self.in_channels = in_channels
-        # arr = [-0.5,0,0.5]
-        arr = [1./280,-4./105,1./5,-4./5,0.,4./5,-1./5,4./105,-1./280]
+        arr = [-0.5,0,0.5]
+        # arr = [1./280,-4./105,1./5,-4./5,0.,4./5,-1./5,4./105,-1./280]
         self.order = len(arr)
         if pos == 0:
             k = np.zeros((self.in_channels, self.in_channels, self.order, 1, 1), dtype=np.float32)
@@ -69,13 +69,16 @@ def variational_derivatives(gradx, grady, ham, p, dpx, dpy, q, dqx, dqy):
     return varp, varq
 
 class Integrator(nn.Module):
-
     def __init__(self, df):
         super(Integrator, self).__init__()
+        self.gradx = ImageGradient(df, pos=1)
+        self.grady = ImageGradient(df, pos=2)
+
 
     def forward(self, ham, p, dpx, dpy, q, dqx, dqy, dt):
-        varp, varq = variational_derivatives(gradx, grady, ham, p, dpx, dpy, q, dqx, dqy)
+        varp, varq = variational_derivatives(self.gradx, self.grady, ham, p, dpx, dpy, q, dqx, dqy)
 
+        # Euler integration
         pp = p - dt * varq
         qp = q + dt * varp
 
@@ -161,3 +164,16 @@ class HamFieldModel(nn.Module):
     def forward(self, images):
         p, q = self.encoder(images)
         return self.ham(p, q), self.decoder(p, q)
+
+
+class PredictiveHamModel(nn.Module):
+
+    def __init__(self, df, hamiltonian_model: Hamiltonian):
+        super(PredictiveHamModel, self).__init__()
+        self.ham = hamiltonian_model
+        self.integrator = Integrator(df)
+
+    def forward(self, p, q, dt):
+        out = self.ham(p, q)
+        n = self.integrator(*out, dt)
+        return n
