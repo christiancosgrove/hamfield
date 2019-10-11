@@ -24,24 +24,31 @@ def gen_data():
         data.append(np.expand_dims(f[:, i:i+window_size, :, :], 0))
     return np.concatenate(data, axis=0).astype(np.float32) / 255.0
 
+def try_cuda(module):
+    if torch.cuda.is_available():
+        module.cuda()
+    else:
+        print('Warning: CUDA not enabled')
+    return module
+
 def train():
 
     iters = 10000
 
     df = 4
 
-    model = HamFieldModel(df).cuda()
+    model = try_cuda(HamFieldModel(df))
     print('generating data')
     data = gen_data()
     print('generated data with shape ', data.shape)
     
     mb_size = 16
-    hloss = HamiltonianLoss(df).cuda()
+    hloss = try_cuda(HamiltonianLoss(df))
 
     optimizer = Adam(model.parameters(), lr=1e-3)
     for i in tqdm(range(iters)):
         sample = np.random.choice(data.shape[0], size=mb_size)
-        batch = torch.tensor(data[sample]).cuda()
+        batch = try_cuda(torch.tensor(data[sample]))
         optimizer.zero_grad()
 
         output, decoded = model(batch)
