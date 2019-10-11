@@ -79,8 +79,8 @@ def train():
                 return im
 
         if e % 2 == 0:
-            imsave(f'out/out{i}.png', disp_tensor(decoded))
-            imsave(f'out/in{i}.png', disp_tensor(batch))
+            imsave(f'out/out{e}.png', disp_tensor(decoded))
+            # imsave(f'out/in{i}.png', disp_tensor(batch))
 
 
 
