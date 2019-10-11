@@ -17,8 +17,7 @@ class ImageGradient(nn.Module):
             k[:, 1,:,1] = arr
         elif pos == 2:
             k[:, 1,1,:] = arr
-        self.kernel: torch.Tensor = torch.from_numpy(k)
-        self.kernel.requires_grad = False
+        self.kernel = nn.Parameter(torch.from_numpy(k), requires_grad=False)
 
 
     def forward(self, x: torch.Tensor):
@@ -27,12 +26,13 @@ class ImageGradient(nn.Module):
 class Hamiltonian(nn.Module):
     def __init__(self, df):
         super(Hamiltonian, self).__init__()
-        self.gradx = ImageGradient(df, pos=1)
-        self.grady = ImageGradient(df, pos=2)
 
         self.conv1 = nn.Conv3d(df * 6, df, 1, padding=1)
         self.conv2 = nn.Conv3d(df, df, 1, padding=1)
         self.conv3 = nn.Conv3d(df, 1, 1, padding=1)
+
+        self.gradx = ImageGradient(df, pos=1)
+        self.grady = ImageGradient(df, pos=2)
 
     def forward(self, p: torch.Tensor, q: torch.Tensor):
 
