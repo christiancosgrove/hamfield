@@ -35,7 +35,7 @@ window_size = 7
 
 def try_cuda(module):
     if torch.cuda.is_available():
-        module.cuda()
+        return module.cuda()
     # else:
         # print('Warning: CUDA not enabled')
     return module
