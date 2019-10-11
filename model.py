@@ -38,8 +38,8 @@ class Hamiltonian(nn.Module):
 
         dpx = self.gradx(p)
         dpy = self.grady(p)
-        dqx = self.gradx(p)
-        dqy = self.grady(p)
+        dqx = self.gradx(q)
+        dqy = self.grady(q)
 
         # Compute hamiltonian
 

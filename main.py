@@ -46,7 +46,7 @@ def train():
         output, decoded = model(batch)
         ham_loss = HamiltonianLoss(df)(*output)
         decoder_loss = nn.MSELoss()(decoded, batch)
-        loss = 1e-3*ham_loss + decoder_loss
+        loss = 1e-1*ham_loss + decoder_loss
         # loss = decoder_loss
         loss.backward()
         optimizer.step()
