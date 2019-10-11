@@ -31,7 +31,7 @@ class PongDataset(Dataset):
     def __getitem__(self, i):
         return self.dat[i]
 
-window_size = 50
+window_size = 25
 
 def try_cuda(module):
     if torch.cuda.is_available():
@@ -66,7 +66,7 @@ def train():
             output, decoded = model(batch)
             ham_loss = hloss(*output)
             decoder_loss = nn.MSELoss()(decoded, batch)
-            loss = 1e-3*ham_loss + decoder_loss
+            loss = 1e-1*ham_loss + decoder_loss
             # loss = decoder_loss
             loss.backward()
             optimizer.step()

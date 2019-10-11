@@ -81,6 +81,10 @@ class HamiltonianLoss(nn.Module):
 
         # Collect subset window
         pad = (self.gradx.order - 1) //2
+
+        # Actual padding is twice the padding of a single gradient kernel
+        # pad *= 2
+
         chan = l_q.size(1)
         l_q = l_q[:, :, pad:-pad+1, pad:-pad+1, pad:-pad+1]
         l_p = l_q[:, :, pad:-pad+1, pad:-pad+1, pad:-pad+1]
