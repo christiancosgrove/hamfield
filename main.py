@@ -63,6 +63,8 @@ def train():
     df = 4
 
     model = try_cuda(HamFieldModel(df))
+    integrator = try_cuda(Integrator(df))
+
     print('generating data')
     
     dataset = PongDataset(4, 32*32, 48)
@@ -72,7 +74,7 @@ def train():
     
     hloss = try_cuda(HamiltonianLoss(df))
 
-    optimizer = Adam(model.parameters(), lr=5e-3)
+    optimizer = Adam(model.parameters(), lr=1e-3)
 
     for e in tqdm(range(epochs)):
         mloss = []
@@ -81,9 +83,21 @@ def train():
             optimizer.zero_grad()
 
             output, decoded = model(batch)
+            _, p, _, _, q, _, _ = output
             ham_loss = hloss(*output)
             decoder_loss = nn.MSELoss()(decoded, batch)
-            loss = 1e1*ham_loss + decoder_loss
+
+            p_next = p.detach()[:, :, 1:, :, :]
+            q_next = q.detach()[:, :, 1:, :, :]
+
+            p_next_pred, q_next_pred = integrator(*output, 0.01)
+            time_size = p.size(2)
+            p_next_pred = p_next_pred[:, :, :time_size-1, :, :]
+            q_next_pred = q_next_pred[:, :, :time_size-1, :, :]
+
+            match_loss = nn.MSELoss()(p_next_pred, p_next) + nn.MSELoss()(q_next_pred, q_next)
+
+            loss = 1e-1*ham_loss + decoder_loss + 10 * match_loss
             # loss = decoder_loss
             loss.backward()
             optimizer.step()
@@ -98,13 +112,13 @@ def train():
                 im = im.astype(np.uint8)
                 return im
 
-        if e % 2 == 0:
-            print('Mean loss: ', np.mean(mloss))
-            imsave(f'out/out{e}.png', disp_tensor(decoded))
-            # imsave(f'out/in{i}.png', disp_tensor(batch))
+            if i % 5 == 0:
+                print('Mean loss: ', np.mean(mloss))
+                imsave(f'out/out{e}.png', disp_tensor(decoded))
+                # imsave(f'out/in{i}.png', disp_tensor(batch))
 
-            # Get predicted dynamics and save to a file
-            skvideo_write('out/test.gif', predicted_dynamics(df, 64, batch[:1], model.encoder, model.decoder, model.ham))
+                # Get predicted dynamics and save to a file
+                skvideo_write('out/test.gif', predicted_dynamics(df, 64, batch[:1], model.encoder, model.decoder, model.ham))
 
 
 if __name__ == '__main__':

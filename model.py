@@ -35,9 +35,10 @@ class Hamiltonian(nn.Module):
     def __init__(self, df):
         super(Hamiltonian, self).__init__()
 
-        self.conv1 = nn.Conv3d(df * 6, df, 1, padding=1)
-        self.conv2 = nn.Conv3d(df, df, 1, padding=1)
-        self.conv3 = nn.Conv3d(df, 1, 1, padding=1)
+        self.conv1 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
+        self.conv2 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
+        self.conv3 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
+        self.conv4 = nn.Conv3d(df * 6, 1, 1, padding=1)
 
         self.gradx = ImageGradient(df, pos=1)
         self.grady = ImageGradient(df, pos=2)
@@ -56,6 +57,7 @@ class Hamiltonian(nn.Module):
         input = nn.ReLU()(self.conv1(input))
         input = nn.ReLU()(self.conv2(input))
         input = nn.ReLU()(self.conv3(input))
+        input = nn.ReLU()(self.conv4(input))
 
         return input, p, dpx, dpy, q, dqx, dqy
 
