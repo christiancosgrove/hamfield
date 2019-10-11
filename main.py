@@ -30,21 +30,22 @@ def train():
 
     df = 4
 
-    model = HamFieldModel(df)
+    model = HamFieldModel(df).cuda()
     print('generating data')
     data = gen_data()
     print('generated data with shape ', data.shape)
     
-    mb_size = 4
+    mb_size = 16
+    hloss = HamiltonianLoss(df).cuda()
 
     optimizer = Adam(model.parameters(), lr=1e-3)
     for i in tqdm(range(iters)):
         sample = np.random.choice(data.shape[0], size=mb_size)
-        batch = torch.tensor(data[sample])
+        batch = torch.tensor(data[sample]).cuda()
         optimizer.zero_grad()
 
         output, decoded = model(batch)
-        ham_loss = HamiltonianLoss(df)(*output)
+        ham_loss = hloss(*output)
         decoder_loss = nn.MSELoss()(decoded, batch)
         loss = 1e-1*ham_loss + decoder_loss
         # loss = decoder_loss
