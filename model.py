@@ -30,9 +30,9 @@ class Hamiltonian(nn.Module):
         self.gradx = ImageGradient(df, pos=1)
         self.grady = ImageGradient(df, pos=2)
 
-        self.conv1 = nn.Conv3d(df * 6, df, 1)
-        self.conv2 = nn.Conv3d(df, df, 1)
-        self.conv3 = nn.Conv3d(df, 1, 1)
+        self.conv1 = nn.Conv3d(df * 6, df, 1, padding=1)
+        self.conv2 = nn.Conv3d(df, df, 1, padding=1)
+        self.conv3 = nn.Conv3d(df, 1, 1, padding=1)
 
     def forward(self, p: torch.Tensor, q: torch.Tensor):
 
@@ -81,9 +81,9 @@ class HamiltonianLoss(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, df):
         super(Encoder, self).__init__()
-        self.conv1 = nn.Conv3d(3, 16, 3)
-        self.conv2 = nn.Conv3d(16, 16, 3)
-        self.conv3 = nn.Conv3d(16, 2*df, 3)
+        self.conv1 = nn.Conv3d(3, 4, 3)
+        self.conv2 = nn.Conv3d(4, 8, 3)
+        self.conv3 = nn.Conv3d(8, 2*df, 3)
         self.df = df
         
 
@@ -97,12 +97,20 @@ class Encoder(nn.Module):
         return p, q
 
 class Decoder(nn.Module):
-
-    def __init__(self):
+    def __init__(self, df):
         super(Decoder, self).__init__()
+        self.df = df
+        self.conv1 = nn.ConvTranspose3d(8, 4, 3)
+        self.conv2 = nn.ConvTranspose3d(4, 4, 3)
+        self.conv3 = nn.ConvTranspose3d(4, 3, 3)
 
     def forward(self, p, q):
-        pass
+        input = torch.cat([p,q], dim=1)
+        input = nn.ReLU()(self.conv1(input))
+        input = nn.ReLU()(self.conv2(input))
+        input = nn.ReLU()(self.conv3(input))
+
+        return input
 
 class HamFieldModel(nn.Module):
     def __init__(self, df):
@@ -112,4 +120,5 @@ class HamFieldModel(nn.Module):
         self.decoder = Decoder(df)
 
     def forward(self, images):
-        return self.ham(*self.encoder(images))
+        p, q = self.encoder(images)
+        return self.ham(p, q), self.decoder(p, q)
