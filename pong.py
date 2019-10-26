@@ -35,17 +35,17 @@ class PingPong(PhysicsSystem):
                 if j == i:
                     continue
                 diff = self.pos[:, i] - self.pos[:, j]
-                if ((diff)**2).sum() < self.radius ** 2:
-                    self.pos[:, i] += diff
+                if ((diff)**2).sum() < (2*self.radius) ** 2:
+                    self.pos[:, i] += 2*1.01*self.radius * diff / np.linalg.norm(diff) - diff
 
     def step(self, timestep):
         # Check collisions
         for i in range(self.num_balls):
             for j in range(i):
                 if j == i:
-                    continue
+                    break
                 diff = self.pos[:, i] - self.pos[:, j]
-                if ((diff)**2).sum() < self.radius ** 2:
+                if ((diff)**2).sum() < (2*self.radius) ** 2:
                     # self.pos[:, i] += diff/2
                     # self.pos[:, j] -= diff/2
 
@@ -71,12 +71,13 @@ class PingPong(PhysicsSystem):
                 self.vel[1, i] *= -1
         
         self.pos += self.vel * timestep
+        self.fix()
 
     def render(self, resolution: int) -> np.array:
         frame = np.ones((resolution, resolution, 3), dtype=np.uint8) * 255
 
         for i in range(self.num_balls):
-            rr, cc = circle(resolution * self.pos[0,i], resolution * self.pos[1,i], self.radius * resolution//2, shape=frame.shape)
+            rr, cc = circle(resolution * self.pos[0,i], resolution * self.pos[1,i], self.radius * resolution, shape=frame.shape)
             frame[rr, cc, :] = 0
         return np.transpose(frame, (2, 0, 1))
 

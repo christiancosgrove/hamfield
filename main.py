@@ -1,5 +1,5 @@
 import pong
-from model import HamFieldModel, HamiltonianLoss, Decoder, Integrator, Hamiltonian, PredictiveHamModel, Encoder
+from model import HamFieldModel, HamiltonianLoss, Decoder, Integrator, Hamiltonian, PredictiveHamModel, Encoder, SymIntegratorP
 import numpy as np
 from skvideo.io import vwrite
 from skimage.io import imsave
@@ -10,11 +10,12 @@ from torch import nn
 from torchvision import transforms, datasets
 from torch.utils.data import Dataset, DataLoader
 
+TIMESTEP = 1e-2
 class PongDataset(Dataset):
     def __init__(self, num_balls, num_frames, resolution):
-        system = pong.PingPong(num_balls, 0.2)
+        system = pong.PingPong(num_balls, 0.1)
 
-        f = system.frames(num_frames, resolution, 0.05)
+        f = system.frames(num_frames, resolution, 0.02)
 
         vwrite('out/out2.gif', f.transpose((1, 2, 3, 0)))
 
@@ -31,7 +32,7 @@ class PongDataset(Dataset):
     def __getitem__(self, i):
         return self.dat[i]
 
-window_size = 25
+window_size = 30
 
 def try_cuda(module):
     if torch.cuda.is_available():
@@ -41,7 +42,12 @@ def try_cuda(module):
     return module
 
 def predicted_dynamics(df, num_frames, image, encoder: Encoder, decoder: Decoder, hamiltonian: Hamiltonian):
-    model = try_cuda(PredictiveHamModel(df, hamiltonian))
+    # model = try_cuda(PredictiveHamModel(df, hamiltonian))
+    hamiltonian.eval()
+    encoder.eval()
+    decoder.eval()
+    integrator_p = try_cuda(SymIntegratorP(df, True))
+    integrator_q = try_cuda(SymIntegratorP(df, False))
     curr_state = encoder(image)
 
     frames = []
@@ -51,7 +57,16 @@ def predicted_dynamics(df, num_frames, image, encoder: Encoder, decoder: Decoder
         frames.append(f[:, :,window_size // 2, :, :])
 
         # Perform a step of integration
-        curr_state = model(*curr_state, 0.05)
+        # curr_state = model(*curr_state, TIMESTEP)
+        output = hamiltonian(*curr_state)
+        curr_state = integrator_p(*output, TIMESTEP)
+        output = hamiltonian(*curr_state)
+        curr_state = integrator_q(*output, TIMESTEP)
+        # curr_state = (curr_state[0].detach(), curr_state[1].detach())
+
+    hamiltonian.train()
+    encoder.train()
+    decoder.train()
     return np.transpose(np.squeeze(np.concatenate(frames, axis=0)), (0, 2, 3, 1))
 
 def skvideo_write(name, arr):
@@ -63,18 +78,19 @@ def train():
     df = 4
 
     model = try_cuda(HamFieldModel(df))
-    integrator = try_cuda(Integrator(df))
+    integrator_p = try_cuda(SymIntegratorP(df, True))
+    integrator_q = try_cuda(SymIntegratorP(df, False))
 
     print('generating data')
     
-    dataset = PongDataset(4, 32*32, 48)
+    dataset = PongDataset(4, 32*32*8, 32)
     mb_size = 1
     loader = DataLoader(dataset, mb_size, shuffle=True, num_workers=4)
 
     
-    hloss = try_cuda(HamiltonianLoss(df))
+    # hloss = try_cuda(HamiltonianLoss(df))
 
-    optimizer = Adam(model.parameters(), lr=1e-3)
+    optimizer = Adam(model.parameters(), lr=5e-4)
 
     for e in tqdm(range(epochs)):
         mloss = []
@@ -84,20 +100,34 @@ def train():
 
             output, decoded = model(batch)
             _, p, _, _, q, _, _ = output
-            ham_loss = hloss(*output)
+            # ham_loss = hloss(*output)
             decoder_loss = nn.MSELoss()(decoded, batch)
 
-            p_next = p.detach()[:, :, 1:, :, :]
-            q_next = q.detach()[:, :, 1:, :, :]
+            frames = 20
 
-            p_next_pred, q_next_pred = integrator(*output, 0.01)
-            time_size = p.size(2)
-            p_next_pred = p_next_pred[:, :, :time_size-1, :, :]
-            q_next_pred = q_next_pred[:, :, :time_size-1, :, :]
 
-            match_loss = nn.MSELoss()(p_next_pred, p_next) + nn.MSELoss()(q_next_pred, q_next)
+            p_next_pred, q_next_pred = p, q
+            loss = decoder_loss
 
-            loss = 1e-1*ham_loss + decoder_loss + 10 * match_loss
+            for f in range(frames):
+                output = model.ham(p_next_pred, q_next_pred)
+                p_next_pred, q_next_pred = integrator_p(*output, TIMESTEP)
+                output = model.ham(p_next_pred, q_next_pred)
+                p_next_pred, q_next_pred = integrator_q(*output, TIMESTEP)
+
+                # p_next = p.detach()[:, :, f:, :, :]
+                # q_next = q.detach()[:, :, f:, :, :]
+                batch_sub = batch[:,:,f+1:, :, :]
+                # time_size = p_next_pred.size(2)
+
+                # p_next_pred = p_next_pred[:, :, :-f-1, :, :]
+                # q_next_pred = q_next_pred[:, :, :-f-1, :, :]
+                if True:#f == frames - 1:
+                    loss += nn.MSELoss()(model.decoder(p_next_pred[:, :, :-f-1, :, :], q_next_pred[:, :, :-f-1, :, :]), batch_sub)
+                    # loss += nn.MSELoss()(p_next_pred[:, :, :-f-1, :, :], p[:, :, f+1:, :, :].detach())
+                    # loss += nn.MSELoss()(q_next_pred[:, :, :-f-1, :, :], q[:, :, f+1:, :, :].detach())
+            # match_loss = nn.MSELoss()(p_next_pred, p_next) + nn.MSELoss()(q_next_pred, q_next)
+
             # loss = decoder_loss
             loss.backward()
             optimizer.step()
@@ -112,13 +142,13 @@ def train():
                 im = im.astype(np.uint8)
                 return im
 
-            if i % 5 == 0:
+            if i % 150 == 0:
                 print('Mean loss: ', np.mean(mloss))
                 imsave(f'out/out{e}.png', disp_tensor(decoded))
                 # imsave(f'out/in{i}.png', disp_tensor(batch))
 
                 # Get predicted dynamics and save to a file
-                skvideo_write('out/test.gif', predicted_dynamics(df, 64, batch[:1], model.encoder, model.decoder, model.ham))
+                skvideo_write(f'out/test{e}.gif', predicted_dynamics(df, 48, batch[:1], model.encoder, model.decoder, model.ham))
 
 
 if __name__ == '__main__':

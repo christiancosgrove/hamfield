@@ -31,44 +31,60 @@ class ImageGradient(nn.Module):
     def forward(self, x: torch.Tensor):
         return F.conv3d(x, self.kernel, padding=self.padding)
 
+class HamPart(nn.Module):
+    def __init__(self, df):
+        super(HamPart, self).__init__()
+
+        self.conv1 = nn.Conv3d(df * 3, df * 6, 1, padding=1)
+        self.conv2 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
+        self.conv3 = nn.Conv3d(df * 6, df * 3, 1, padding=1)
+        self.conv4 = nn.Conv3d(df * 3, 1, 1, padding=1)
+
+        self.dropout1 = nn.Dropout3d()
+        self.dropout2 = nn.Dropout3d()
+        self.dropout3 = nn.Dropout3d()
+        self.gradx = ImageGradient(df, pos=1)
+        self.grady = ImageGradient(df, pos=2)
+
+    def forward(self, x: torch.Tensor):
+
+        dxx = self.gradx(x)
+        dxy = self.grady(x)
+        input = torch.cat([x, dxx, dxy], dim=1)
+        # input = self.dropout1(nn.ReLU()(self.conv1(input)))
+        # input = self.dropout2(nn.ReLU()(self.conv2(input)))
+        # input = self.dropout3(nn.ReLU()(self.conv3(input)))
+        input = (nn.ReLU()(self.conv1(input)))
+        input = (nn.ReLU()(self.conv2(input)))
+        input = (nn.ReLU()(self.conv3(input)))
+        input = nn.ReLU()(self.conv4(input))
+
+        return input, x, dxx, dxy
+
+
 class Hamiltonian(nn.Module):
     def __init__(self, df):
         super(Hamiltonian, self).__init__()
 
-        self.conv1 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
-        self.conv2 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
-        self.conv3 = nn.Conv3d(df * 6, df * 6, 1, padding=1)
-        self.conv4 = nn.Conv3d(df * 6, 1, 1, padding=1)
-
-        self.gradx = ImageGradient(df, pos=1)
-        self.grady = ImageGradient(df, pos=2)
+        self.kin = HamPart(df)
+        self.pot = HamPart(df)
 
     def forward(self, p: torch.Tensor, q: torch.Tensor):
 
-        dpx = self.gradx(p)
-        dpy = self.grady(p)
-        dqx = self.gradx(q)
-        dqy = self.grady(q)
+        kinetic, p, dpx, dpy = self.kin(p)
+        potential, q, dqx, dqy = self.pot(q)
 
-        # Compute hamiltonian
-
-
-        input = torch.cat([p, dpx, dpy, q, dqx, dqy], dim=1)
-        input = nn.ReLU()(self.conv1(input))
-        input = nn.ReLU()(self.conv2(input))
-        input = nn.ReLU()(self.conv3(input))
-        input = nn.ReLU()(self.conv4(input))
+        input = kinetic + potential
 
         return input, p, dpx, dpy, q, dqx, dqy
 
-def variational_derivatives(gradx, grady, ham, p, dpx, dpy, q, dqx, dqy):
+def variational_derivatives(gradx, grady, ham, p, dpx, dpy):
     batch_size = ham.size(0)
     hsum = ham.view(batch_size, -1).sum()
 
     varp = grad(hsum, p, create_graph=True)[0] - gradx(grad(hsum, dpx, create_graph=True)[0]) - grady(grad(hsum, dpy, create_graph=True)[0])
-    varq = grad(hsum, q, create_graph=True)[0] - gradx(grad(hsum, dqx, create_graph=True)[0]) - grady(grad(hsum, dqy, create_graph=True)[0])
 
-    return varp, varq
+    return varp
 
 class Integrator(nn.Module):
     def __init__(self, df):
@@ -85,6 +101,25 @@ class Integrator(nn.Module):
         qp = q + dt * varp
 
         return pp, qp
+
+class SymIntegratorP(nn.Module):
+    def __init__(self, df, use_p):
+        super(SymIntegratorP, self).__init__()
+        self.gradx = ImageGradient(df, pos=1)
+        self.grady = ImageGradient(df, pos=2)
+        self.use_p = use_p
+
+    def forward(self, ham, p, dpx, dpy, q, dqx, dqy, dt):
+        # Euler integration
+        if self.use_p:
+            var_deriv = variational_derivatives(self.gradx, self.grady, ham, p, dpx, dpy)
+
+            return p - dt * var_deriv, q
+        else:
+            var_deriv = variational_derivatives(self.gradx, self.grady, ham, q, dqx, dqy)
+
+            return p, q + dt * var_deriv
+
 
 class HamiltonianLoss(nn.Module):
 
@@ -123,15 +158,17 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.conv1 = nn.Conv3d(3, 4, 3)
         self.bn1 = nn.BatchNorm3d(4)
+        self.dropout1 = nn.Dropout3d()
         self.conv2 = nn.Conv3d(4, 8, 3)
         self.bn2 = nn.BatchNorm3d(8)
+        self.dropout2 = nn.Dropout3d()
         self.conv3 = nn.Conv3d(8, 2*df, 3)
         self.df = df
         
 
     def forward(self, images):
-        x = nn.ReLU()(self.bn1(self.conv1(images)))
-        x = nn.ReLU()(self.bn2(self.conv2(x)))
+        x = self.dropout1(nn.ReLU()(self.bn1(self.conv1(images))))
+        x = self.dropout2(nn.ReLU()(self.bn2(self.conv2(x))))
         x = nn.ReLU()(self.conv3(x))
 
         p, q = torch.split(x, self.df, dim=1)
@@ -144,14 +181,16 @@ class Decoder(nn.Module):
         self.df = df
         self.conv1 = nn.ConvTranspose3d(df*2, 4, 3)
         self.bn1 = nn.BatchNorm3d(4)
+        self.dropout1 = nn.Dropout3d()
         self.conv2 = nn.ConvTranspose3d(4, 4, 3)
         self.bn2 = nn.BatchNorm3d(4)
+        self.dropout2 = nn.Dropout3d()
         self.conv3 = nn.ConvTranspose3d(4, 3, 3)
 
     def forward(self, p, q):
         input = torch.cat([p,q], dim=1)
-        input = nn.ReLU()(self.bn1(self.conv1(input)))
-        input = nn.ReLU()(self.bn2(self.conv2(input)))
+        input = self.dropout1(nn.ReLU()(self.bn1(self.conv1(input))))
+        input = self.dropout2(nn.ReLU()(self.bn2(self.conv2(input))))
         input = nn.Sigmoid()(self.conv3(input))
 
         return input
